@@ -2,7 +2,8 @@
 
 Static dashboard export for MLB prop edge tracking.
 
-This repository intentionally contains only sanitized static dashboard files. No model source, credentials, raw runtime files, or private run artifacts should be committed here.
+This repository intentionally contains only sanitized static dashboard files. No model source,
+credentials, raw runtime files, or private run artifacts should be committed here.
 
 ## Publish source
 
