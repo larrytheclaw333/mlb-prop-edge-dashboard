@@ -10,7 +10,7 @@ credentials, raw runtime files, or private run artifacts should be committed her
 Generated from the private model project with:
 
 ```bash
-mlb-prop-edge export-dashboard-static --start-date 2026-05-04 --end-date yesterday --sanitize
+mlb-prop-edge export-dashboard-static --start-date 2026-05-04 --end-date today --sanitize
 ```
 
 GitHub Pages serves this repo from the `main` branch root.
