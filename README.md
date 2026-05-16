@@ -9,7 +9,7 @@ This repository intentionally contains only sanitized static dashboard files. No
 Generated from the private model project with:
 
 ```bash
-mlb-prop-edge export-dashboard-static --start-date 2026-05-04 --end-date today --sanitize
+mlb-prop-edge export-dashboard-static --start-date 2026-05-04 --end-date yesterday --sanitize
 ```
 
 GitHub Pages serves this repo from the `main` branch root.
