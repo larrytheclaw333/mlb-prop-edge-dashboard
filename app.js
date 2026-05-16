@@ -1,0 +1,570 @@
+// MLB Prop Edge Dashboard — app.js
+// Loads from ./data/latest.json, ./data/history.json, ./data/manifest.json
+
+"use strict";
+
+// ── State ────────────────────────────────────────────────────────────────────
+
+let STATE = {
+  currentDate: null,
+  dayData: null,
+  history: null,
+  manifest: null,
+  activePage: "picks",
+  explorerSort: { key: "expected_value_per_100", dir: -1 },
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(v, decimals = 2) {
+  if (v == null) return "—";
+  return Number(v).toFixed(decimals);
+}
+function fmtPct(v) { return v == null ? "—" : fmt(v, 1) + "%"; }
+function fmtOdds(v) { return v == null ? "—" : (v > 0 ? "+" + v : "" + v); }
+function fmtPL(v) { return v == null ? "—" : (v >= 0 ? "+$" + fmt(v) : "-$" + fmt(Math.abs(v))); }
+function selClass(s) {
+  const lc = (s || "").toLowerCase();
+  return ["over","under","yrfi","nrfi"].includes(lc) ? lc : "";
+}
+function mktLabel(m) {
+  return { pitcher_strikeouts: "Pitcher Ks", batter_hits: "Batter hits", nrfi_yrfi: "NRFI/YRFI" }[m] || m;
+}
+function mktBadgeHTML(m) {
+  const cls = { pitcher_strikeouts: "mkt-k", batter_hits: "mkt-hits", nrfi_yrfi: "mkt-nrfi" }[m] || "mkt-k";
+  return `<span class="mkt-badge ${cls}">${mktLabel(m)}</span>`;
+}
+function el(id) { return document.getElementById(id); }
+function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadManifest() {
+  try {
+    const r = await fetch("./data/manifest.json");
+    STATE.manifest = await r.json();
+  } catch (e) {
+    STATE.manifest = { dates: [], latest: null };
+  }
+}
+
+async function loadDay(date) {
+  const url = date === STATE.manifest?.latest
+    ? "./data/latest.json"
+    : `./data/daily/${date}.json`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Failed to load ${url}`);
+  return r.json();
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch("./data/history.json");
+    STATE.history = await r.json();
+  } catch (e) {
+    STATE.history = { days: [], totals: {} };
+  }
+}
+
+// ── Date picker ──────────────────────────────────────────────────────────────
+
+function buildDatePicker() {
+  const sel = el("date-picker");
+  if (!sel || !STATE.manifest) return;
+  sel.innerHTML = "";
+  const dates = [...STATE.manifest.dates].reverse();
+  dates.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d;
+    opt.textContent = d;
+    if (d === STATE.currentDate) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = async () => {
+    el("loading-msg").textContent = "Loading…";
+    STATE.dayData = await loadDay(sel.value);
+    STATE.currentDate = sel.value;
+    el("loading-msg").textContent = "";
+    renderAll();
+  };
+}
+
+// ── Run metadata bar ─────────────────────────────────────────────────────────
+
+function renderMeta() {
+  const d = STATE.dayData;
+  if (!d) return;
+  const cm = d.candidates_meta || {};
+  const windows = cm.window_count || cm.source_windows?.length || 1;
+  el("run-meta").textContent =
+    `${d.run_date} · ${windows} window${windows !== 1 ? "s" : ""} · ${d.summary.total_candidates} candidates`;
+}
+
+// ── Picks page ───────────────────────────────────────────────────────────────
+
+function buildPickCard(c, isPick) {
+  const div = document.createElement("div");
+  div.className = "pick-card" + (isPick ? " is-pick" : "");
+  const sc = selClass(c.selection);
+  const edge = c.edge_percentage_points;
+  const edgeCls = edge >= 0 ? "pos" : "neg";
+  const edgeSign = edge >= 0 ? "+" : "";
+
+  // Result badge
+  let resultHTML = "";
+  if (c.win === true) {
+    resultHTML = `<div class="result-row"><span class="result-badge result-win">Win</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${c.profit_loss != null ? `<span class="result-text pos">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
+  } else if (c.win === false) {
+    resultHTML = `<div class="result-row"><span class="result-badge result-loss">Loss</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${c.profit_loss != null ? `<span class="result-text neg">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
+  } else {
+    resultHTML = `<div class="result-row"><span class="result-badge result-pending">Pending</span></div>`;
+  }
+
+  // Market-specific detail rows
+  let detailRows = "";
+  if (c.market === "pitcher_strikeouts") {
+    detailRows = [
+      ["Projected Ks", fmt(c.projected_ks, 2)],
+      ["IP / start", fmt(c.ip_per_start, 2)],
+      ["Starter role", c.starter_role ? c.starter_role.replace(/_/g, " ") : "—"],
+      ["Opp K adjustment", fmt(c.opponent_k_adjustment, 3)],
+      ["Baseball prob", fmtPct(c.baseball_probability)],
+      ["Consensus prob", fmtPct(c.consensus_probability)],
+      ["Model weight", c.baseball_weight != null ? (c.baseball_weight * 100).toFixed(0) + "%" : "—"],
+      ["Park factor", fmt(c.park_hit_factor, 2)],
+    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
+  } else if (c.market === "batter_hits") {
+    detailRows = [
+      ["AVG / xBA", `${fmt(c.batter_avg, 3)} / ${c.batter_xba != null ? fmt(c.batter_xba, 3) : "—"}`],
+      ["xBA available", c.xba_available ? "yes" : "no"],
+      ["xBA blend used", c.xba_blend_used ? "yes" : "no"],
+      ["Season PA", c.season_pa ?? "—"],
+      ["Lineup spot", c.lineup_spot != null ? "#" + c.lineup_spot : "—"],
+      ["Lineup confirmed", c.lineup_confirmed ? "yes" : "no"],
+      ["Opp pitcher", c.opposing_pitcher || "—"],
+      [`Opp ERA / H9`, c.opposing_pitcher_era != null ? `${fmt(c.opposing_pitcher_era, 2)} / ${fmt(c.opposing_pitcher_h9, 2)}` : "—"],
+      ["Pitcher hit adj", fmt(c.pitcher_hit_adjustment, 3)],
+      ["Park factor", fmt(c.park_hit_factor, 2)],
+      ["Baseball prob", fmtPct(c.baseball_probability)],
+      ["Consensus prob", fmtPct(c.consensus_probability)],
+    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
+  } else if (c.market === "nrfi_yrfi") {
+    detailRows = [
+      ["Away starter", c.away_probable_pitcher || "—"],
+      ["Home starter", c.home_probable_pitcher || "—"],
+      ["Away 1st inn λ", fmt(c.away_first_inning_lambda, 3)],
+      ["Home 1st inn λ", fmt(c.home_first_inning_lambda, 3)],
+      ["Away score prob", fmtPct(c.away_score_probability)],
+      ["Home score prob", fmtPct(c.home_score_probability)],
+      ["Market hold %", fmt(c.market_hold_pct, 1)],
+      ["Baseball prob", fmtPct(c.baseball_probability)],
+      ["Consensus prob", fmtPct(c.consensus_probability)],
+    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
+  }
+
+  const uid = (c.candidate_id || c.label || Math.random()).toString().replace(/[^a-z0-9]/gi, "_");
+
+  div.innerHTML = `
+    <div class="pick-header">
+      <span class="sel-badge sel-${sc}">${c.selection}</span>
+      <span class="pick-name">${c.label}</span>
+      ${mktBadgeHTML(c.market)}
+    </div>
+    <div class="pick-stats">
+      <div class="pstat">EV <span>$${fmt(c.expected_value_per_100, 2)}</span></div>
+      <div class="pstat">Edge <span class="${edgeCls}">${edgeSign}${fmt(edge, 2)}pp</span></div>
+      <div class="pstat">Model <span>${fmtPct(c.model_probability)}</span></div>
+      <div class="pstat">Implied <span>${fmtPct(c.implied_probability)}</span></div>
+      <div class="pstat">Odds <span>${fmtOdds(c.american_odds)}</span></div>
+      <div class="pstat">@ <span>${c.venue_name || c.event_label || "—"}</span></div>
+    </div>
+    ${resultHTML}
+    <div class="pick-detail" id="det-${uid}">
+      <div class="prob-visual">
+        <div class="prob-track">
+          <div class="prob-fill" style="width:${Math.min(c.model_probability ?? 0, 100)}%"></div>
+          <div class="prob-marker" style="left:${Math.min(c.implied_probability ?? 0, 100)}%"></div>
+        </div>
+        <div class="prob-labels">
+          <span>Model ${fmtPct(c.model_probability)}</span>
+          <span>Implied ${fmtPct(c.implied_probability)}</span>
+        </div>
+      </div>
+      <div class="detail-grid">${detailRows}</div>
+    </div>`;
+
+  div.querySelector(".pick-header").addEventListener("click", () => {
+    const det = div.querySelector(".pick-detail");
+    const open = det.classList.toggle("open");
+    div.classList.toggle("expanded", open);
+  });
+
+  return div;
+}
+
+function renderPicksPage() {
+  const d = STATE.dayData;
+  if (!d) return;
+  const s = d.summary;
+
+  // Summary stats
+  const winLabel = s.wins > 0 || s.losses > 0
+    ? `${s.wins}W / ${s.losses}L`
+    : `${s.pending} pending`;
+  const plLabel = s.total_profit_loss !== 0
+    ? fmtPL(s.total_profit_loss)
+    : "no settled bets";
+
+  el("stat-total").textContent = s.total_candidates;
+  el("stat-qualified").textContent = s.qualified_count;
+  el("stat-picks").textContent = s.picks_count;
+  el("stat-pl").textContent = plLabel;
+  el("stat-record").textContent = winLabel;
+
+  // Picks
+  const pl = el("picks-list");
+  pl.innerHTML = "";
+  if (!d.picks || d.picks.length === 0) {
+    pl.innerHTML = '<p class="empty">No final picks for this date.</p>';
+  } else {
+    d.picks.forEach(p => pl.appendChild(buildPickCard(p, true)));
+  }
+
+  // Qualified
+  const ql = el("qualified-list");
+  ql.innerHTML = "";
+  if (!d.qualified || d.qualified.length === 0) {
+    ql.innerHTML = '<p class="empty">No qualified candidates for this date.</p>';
+  } else {
+    d.qualified.forEach(q => ql.appendChild(buildPickCard(q, false)));
+  }
+}
+
+// ── Explorer page ────────────────────────────────────────────────────────────
+
+let explorerSortKey = "expected_value_per_100";
+let explorerSortDir = -1;
+
+function renderExplorer() {
+  const d = STATE.dayData;
+  if (!d) return;
+
+  const mktF = el("f-market").value;
+  const qualF = el("f-qual").value;
+  const selF = el("f-sel").value;
+
+  let data = (d.all_candidates || []).slice();
+  if (mktF) data = data.filter(c => c.market === mktF);
+  if (qualF === "true") data = data.filter(c => c.qualified);
+  if (qualF === "false") data = data.filter(c => !c.qualified);
+  if (selF === "Over") data = data.filter(c => c.selection === "Over" || c.selection === "YRFI");
+  if (selF === "Under") data = data.filter(c => c.selection === "Under" || c.selection === "NRFI");
+
+  data.sort((a, b) => explorerSortDir * ((b[explorerSortKey] ?? -9999) - (a[explorerSortKey] ?? -9999)));
+
+  const tbody = el("explorer-body");
+  tbody.innerHTML = "";
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">No candidates match filters.</td></tr>';
+    el("tbl-count").textContent = "0 results";
+    return;
+  }
+
+  data.forEach(c => {
+    const edge = c.edge_percentage_points;
+    const ecls = edge >= 0 ? "pos" : "neg";
+    const sc = selClass(c.selection);
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${c.label}</td>
+      <td>${mktBadgeHTML(c.market)}</td>
+      <td><span class="sel-badge sel-${sc}" style="font-size:10px;">${c.selection}</span></td>
+      <td>${fmtOdds(c.american_odds)}</td>
+      <td>${fmtPct(c.model_probability)}</td>
+      <td>${fmtPct(c.implied_probability)}</td>
+      <td class="${ecls}">${edge >= 0 ? "+" : ""}${fmt(edge, 2)}</td>
+      <td>$${fmt(c.expected_value_per_100, 2)}</td>
+      <td><span class="${c.qualified ? "badge-q" : "badge-nq"}">${c.qualified ? "yes" : "no"}</span></td>`;
+    tbody.appendChild(row);
+  });
+
+  el("tbl-count").textContent = `${data.length} of ${d.all_candidates?.length ?? 0} candidates`;
+}
+
+function setupExplorerSort() {
+  document.querySelectorAll("th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (explorerSortKey === key) {
+        explorerSortDir *= -1;
+      } else {
+        explorerSortKey = key;
+        explorerSortDir = -1;
+      }
+      document.querySelectorAll("th[data-sort]").forEach(t => {
+        t.classList.remove("sorted");
+        t.querySelector(".sort-arrow").textContent = "↕";
+      });
+      th.classList.add("sorted");
+      th.querySelector(".sort-arrow").textContent = explorerSortDir === -1 ? "↓" : "↑";
+      renderExplorer();
+    });
+  });
+  ["f-market","f-qual","f-sel"].forEach(id => {
+    el(id)?.addEventListener("change", renderExplorer);
+  });
+}
+
+// ── Diagnostics page ─────────────────────────────────────────────────────────
+
+let chartsBuilt = false;
+let mktChart, edgeChart;
+
+function renderDiagnostics() {
+  const d = STATE.dayData;
+  if (!d) return;
+  const cov = d.summary.coverage;
+  const bh = cov.batter_hits;
+  const pk = cov.pitcher_strikeouts;
+  const nrfi = cov.nrfi_yrfi;
+
+  // Stat grid
+  el("diag-batter").textContent = bh.total;
+  el("diag-batter-q").textContent = bh.qualified + " qualified";
+  el("diag-pitcher").textContent = pk.total;
+  el("diag-pitcher-q").textContent = pk.qualified + " qualified";
+  el("diag-nrfi").textContent = nrfi.total;
+  el("diag-nrfi-q").textContent = nrfi.qualified + " qualified";
+
+  // Coverage bars
+  function covBar(pct) {
+    return `<div class="cov-bar-fill" style="width:${Math.min(pct || 0, 100)}%"></div>`;
+  }
+  el("cov-xba").innerHTML = covBar(bh.xba_available_pct);
+  el("cov-xba-pct").textContent = fmtPct(bh.xba_available_pct);
+  el("cov-blend").innerHTML = covBar(bh.xba_blend_used_pct);
+  el("cov-blend-pct").textContent = fmtPct(bh.xba_blend_used_pct);
+  el("cov-lineup").innerHTML = covBar(bh.lineup_confirmed_pct);
+  el("cov-lineup-pct").textContent = fmtPct(bh.lineup_confirmed_pct);
+  el("cov-pitcher").innerHTML = covBar(bh.pitcher_mapped_pct);
+  el("cov-pitcher-pct").textContent = fmtPct(bh.pitcher_mapped_pct);
+
+  // Rejection reasons
+  const rejEl = el("rej-list");
+  rejEl.innerHTML = "";
+  const rejs = Object.entries(cov.rejection_reasons || {}).sort((a,b) => b[1]-a[1]);
+  const rejMax = rejs[0]?.[1] || 1;
+  rejs.forEach(([r, n]) => {
+    rejEl.innerHTML += `<div class="cov-row">
+      <span class="cov-lbl">${r.replace(/_/g, " ")}</span>
+      <div class="cov-bar-wrap"><div class="cov-bar-fill" style="width:${(n/rejMax*100).toFixed(0)}%"></div></div>
+      <span class="cov-pct">${n}</span>
+    </div>`;
+  });
+
+  // Confidence distribution
+  const confEl = el("conf-list");
+  confEl.innerHTML = "";
+  const confs = Object.entries(cov.confidence_distribution || {}).sort((a,b) => b[1]-a[1]);
+  const confMax = confs[0]?.[1] || 1;
+  confs.forEach(([c2, n]) => {
+    confEl.innerHTML += `<div class="cov-row">
+      <span class="cov-lbl">${c2}</span>
+      <div class="cov-bar-wrap"><div class="cov-bar-fill" style="width:${(n/confMax*100).toFixed(0)}%"></div></div>
+      <span class="cov-pct">${n}</span>
+    </div>`;
+  });
+
+  // Charts
+  buildDiagCharts(d);
+}
+
+function buildDiagCharts(d) {
+  const cov = d.summary.coverage;
+
+  // Market breakdown chart
+  if (mktChart) mktChart.destroy();
+  const mktCtx = el("mkt-chart");
+  if (mktCtx) {
+    mktChart = new Chart(mktCtx, {
+      type: "bar",
+      data: {
+        labels: ["Batter hits","Pitcher Ks","NRFI/YRFI"],
+        datasets: [
+          { label: "Total", data: [cov.batter_hits.total, cov.pitcher_strikeouts.total, cov.nrfi_yrfi.total], backgroundColor: "#B5D4F4" },
+          { label: "Qualified", data: [cov.batter_hits.qualified, cov.pitcher_strikeouts.qualified, cov.nrfi_yrfi.qualified], backgroundColor: "#378ADD" },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: "rgba(128,128,128,0.1)" }, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+
+  // Edge distribution for pitcher Ks
+  if (edgeChart) edgeChart.destroy();
+  const edgeCtx = el("edge-chart");
+  if (edgeCtx) {
+    const kCands = (d.qualified || []).filter(c => c.market === "pitcher_strikeouts")
+      .sort((a,b) => b.edge_percentage_points - a.edge_percentage_points);
+    const labels = kCands.map(c => c.player || c.label);
+    const edges = kCands.map(c => parseFloat((c.edge_percentage_points || 0).toFixed(2)));
+    edgeChart = new Chart(edgeCtx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          data: edges,
+          backgroundColor: edges.map(e => e >= 0 ? "#3B6D11" : "#A32D2D"),
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            grid: { color: "rgba(128,128,128,0.1)" },
+            ticks: { callback: v => v + "pp" }
+          },
+          y: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+}
+
+// ── History page ─────────────────────────────────────────────────────────────
+
+let plChart, wlChart;
+
+function renderHistory() {
+  const h = STATE.history;
+  if (!h || !h.days || h.days.length === 0) {
+    el("hist-content").innerHTML = '<p class="empty">No history data yet. Run <code>mlb-prop-edge export-dashboard-static</code> with multiple dates.</p>';
+    return;
+  }
+  const t = h.totals;
+
+  el("hist-picks").textContent = t.total_picks ?? "—";
+  el("hist-wins").textContent = t.total_wins ?? "—";
+  el("hist-losses").textContent = t.total_losses ?? "—";
+  el("hist-wr").textContent = t.win_rate != null ? t.win_rate + "%" : "—";
+  el("hist-pl").textContent = fmtPL(t.cumulative_pl);
+
+  buildHistoryCharts(h.days);
+}
+
+function buildHistoryCharts(days) {
+  const labels = days.map(d => d.date);
+
+  if (plChart) plChart.destroy();
+  const plCtx = el("pl-chart");
+  if (plCtx) {
+    plChart = new Chart(plCtx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Cumulative P/L",
+          data: days.map(d => d.cumulative_pl),
+          borderColor: "#378ADD",
+          backgroundColor: "rgba(55,138,221,0.08)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
+          y: { grid: { color: "rgba(128,128,128,0.1)" }, ticks: { callback: v => "$" + v } }
+        }
+      }
+    });
+  }
+
+  if (wlChart) wlChart.destroy();
+  const wlCtx = el("wl-chart");
+  if (wlCtx) {
+    wlChart = new Chart(wlCtx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "Wins", data: days.map(d => d.wins), backgroundColor: "#3B6D11" },
+          { label: "Losses", data: days.map(d => d.losses), backgroundColor: "#A32D2D" },
+          { label: "Pending", data: days.map(d => d.pending), backgroundColor: "#B5D4F4" },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: true, position: "bottom", labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } } },
+        scales: {
+          x: { stacked: true, ticks: { maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
+          y: { stacked: true, grid: { color: "rgba(128,128,128,0.1)" }, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  const pageEl = el("page-" + name);
+  if (pageEl) pageEl.classList.add("active");
+  document.querySelector(`.nav-btn[data-page="${name}"]`)?.classList.add("active");
+  STATE.activePage = name;
+
+  if (name === "explorer") renderExplorer();
+  if (name === "diagnostics") renderDiagnostics();
+  if (name === "history") renderHistory();
+}
+
+function renderAll() {
+  renderMeta();
+  renderPicksPage();
+  if (STATE.activePage === "explorer") renderExplorer();
+  if (STATE.activePage === "diagnostics") renderDiagnostics();
+  if (STATE.activePage === "history") renderHistory();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+async function boot() {
+  el("loading-msg").textContent = "Loading…";
+
+  await loadManifest();
+  await loadHistory();
+
+  const latestDate = STATE.manifest?.latest;
+  if (!latestDate) {
+    el("loading-msg").textContent = "No data found. Run export-dashboard-static first.";
+    return;
+  }
+
+  STATE.currentDate = latestDate;
+  STATE.dayData = await loadDay(latestDate);
+  el("loading-msg").textContent = "";
+
+  buildDatePicker();
+  setupExplorerSort();
+
+  document.querySelectorAll(".nav-btn[data-page]").forEach(btn => {
+    btn.addEventListener("click", () => showPage(btn.dataset.page));
+  });
+
+  renderAll();
+}
+
+document.addEventListener("DOMContentLoaded", boot);

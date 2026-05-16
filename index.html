@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLB Prop Edge Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">MLB Prop Edge</span>
+      <span class="run-meta" id="run-meta">Loading…</span>
+    </div>
+    <div class="nav">
+      <button class="nav-btn active" data-page="picks">Picks</button>
+      <button class="nav-btn" data-page="explorer">Explorer</button>
+      <button class="nav-btn" data-page="diagnostics">Diagnostics</button>
+      <button class="nav-btn" data-page="history">History</button>
+    </div>
+  </div>
+
+  <!-- Date picker -->
+  <div class="date-bar">
+    <label for="date-picker">Date</label>
+    <select class="date-sel" id="date-picker"></select>
+    <span id="loading-msg" style="font-size:11px; color:var(--text-tertiary);"></span>
+  </div>
+
+  <!-- ── PICKS PAGE ── -->
+  <div class="page active" id="page-picks">
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Candidates</div>
+        <div class="stat-val" id="stat-total">—</div>
+        <div class="stat-sub">total scored</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Qualified</div>
+        <div class="stat-val" id="stat-qualified">—</div>
+        <div class="stat-sub">met edge + EV threshold</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Final picks</div>
+        <div class="stat-val" id="stat-picks">—</div>
+        <div class="stat-sub" id="stat-record">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">P/L</div>
+        <div class="stat-val" id="stat-pl">—</div>
+        <div class="stat-sub">settled picks only</div>
+      </div>
+    </div>
+
+    <div class="section-title">Final picks</div>
+    <div class="picks-list" id="picks-list"></div>
+
+    <div class="section-title">All qualified candidates</div>
+    <div class="picks-list" id="qualified-list"></div>
+
+  </div>
+
+  <!-- ── EXPLORER PAGE ── -->
+  <div class="page" id="page-explorer">
+
+    <div class="filter-bar">
+      <select class="filter-sel" id="f-market">
+        <option value="">All markets</option>
+        <option value="pitcher_strikeouts">Pitcher Ks</option>
+        <option value="batter_hits">Batter hits</option>
+        <option value="nrfi_yrfi">NRFI/YRFI</option>
+      </select>
+      <select class="filter-sel" id="f-qual">
+        <option value="">All candidates</option>
+        <option value="true">Qualified only</option>
+        <option value="false">Not qualified</option>
+      </select>
+      <select class="filter-sel" id="f-sel">
+        <option value="">Over + Under</option>
+        <option value="Over">Over / YRFI</option>
+        <option value="Under">Under / NRFI</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="label">Label <span class="sort-arrow">↕</span></th>
+            <th>Market</th>
+            <th>Sel</th>
+            <th data-sort="american_odds">Odds <span class="sort-arrow">↕</span></th>
+            <th data-sort="model_probability">Model % <span class="sort-arrow">↕</span></th>
+            <th data-sort="implied_probability">Implied % <span class="sort-arrow">↕</span></th>
+            <th data-sort="edge_percentage_points">Edge pp <span class="sort-arrow">↕</span></th>
+            <th data-sort="expected_value_per_100" class="sorted">EV/100 <span class="sort-arrow">↓</span></th>
+            <th data-sort="qualified">Qual <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="explorer-body"></tbody>
+      </table>
+    </div>
+    <div class="tbl-count" id="tbl-count"></div>
+
+  </div>
+
+  <!-- ── DIAGNOSTICS PAGE ── -->
+  <div class="page" id="page-diagnostics">
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Batter hits</div>
+        <div class="stat-val" id="diag-batter">—</div>
+        <div class="stat-sub" id="diag-batter-q">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pitcher Ks</div>
+        <div class="stat-val" id="diag-pitcher">—</div>
+        <div class="stat-sub" id="diag-pitcher-q">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">NRFI/YRFI</div>
+        <div class="stat-val" id="diag-nrfi">—</div>
+        <div class="stat-sub" id="diag-nrfi-q">—</div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Candidates by market</div>
+        <div style="position:relative; height:160px;">
+          <canvas id="mkt-chart" role="img" aria-label="Candidates by market, total vs qualified"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Edge distribution — qualified Ks</div>
+        <div style="position:relative; height:160px;">
+          <canvas id="edge-chart" role="img" aria-label="Edge in pp for each qualified pitcher K candidate"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="cov-grid">
+      <div class="cov-card">
+        <div class="cov-title">Batter hits coverage</div>
+        <div class="cov-row">
+          <span class="cov-lbl">xBA available</span>
+          <div class="cov-bar-wrap" id="cov-xba"></div>
+          <span class="cov-pct" id="cov-xba-pct">—</span>
+        </div>
+        <div class="cov-row">
+          <span class="cov-lbl">xBA blend used</span>
+          <div class="cov-bar-wrap" id="cov-blend"></div>
+          <span class="cov-pct" id="cov-blend-pct">—</span>
+        </div>
+        <div class="cov-row">
+          <span class="cov-lbl">Lineup confirmed</span>
+          <div class="cov-bar-wrap" id="cov-lineup"></div>
+          <span class="cov-pct" id="cov-lineup-pct">—</span>
+        </div>
+        <div class="cov-row">
+          <span class="cov-lbl">Pitcher mapped</span>
+          <div class="cov-bar-wrap" id="cov-pitcher"></div>
+          <span class="cov-pct" id="cov-pitcher-pct">—</span>
+        </div>
+      </div>
+
+      <div class="cov-card">
+        <div class="cov-title">Rejection reasons</div>
+        <div id="rej-list"></div>
+      </div>
+
+      <div class="cov-card">
+        <div class="cov-title">Confidence distribution</div>
+        <div id="conf-list"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── HISTORY PAGE ── -->
+  <div class="page" id="page-history">
+    <div id="hist-content">
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total picks</div>
+          <div class="stat-val" id="hist-picks">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Wins</div>
+          <div class="stat-val pos" id="hist-wins">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Losses</div>
+          <div class="stat-val neg" id="hist-losses">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Win rate</div>
+          <div class="stat-val" id="hist-wr">—</div>
+          <div class="stat-sub">settled only</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cumulative P/L</div>
+          <div class="stat-val" id="hist-pl">—</div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">Cumulative P/L over time</div>
+          <div style="position:relative; height:200px;">
+            <canvas id="pl-chart" role="img" aria-label="Cumulative profit/loss by date"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Daily wins / losses / pending</div>
+          <div style="position:relative; height:200px;">
+            <canvas id="wl-chart" role="img" aria-label="Win/loss/pending counts by date"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
