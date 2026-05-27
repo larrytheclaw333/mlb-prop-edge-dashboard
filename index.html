@@ -19,6 +19,7 @@
       <button class="nav-btn active" data-page="picks">Picks</button>
       <button class="nav-btn" data-page="explorer">Explorer</button>
       <button class="nav-btn" data-page="diagnostics">Diagnostics</button>
+      <button class="nav-btn" data-page="audit">Audit</button>
       <button class="nav-btn" data-page="history">History</button>
     </div>
   </div>
@@ -180,6 +181,86 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ── AUDIT PAGE ── -->
+  <div class="page" id="page-audit">
+    <div class="audit-banner" id="audit-guardrail">Loading audit guardrail…</div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Audit window</div>
+        <div class="stat-val audit-window" id="audit-window">—</div>
+        <div class="stat-sub">settled historical sample</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Qualified</div>
+        <div class="stat-val" id="audit-qualified">—</div>
+        <div class="stat-sub" id="audit-roi-eligible">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Win rate</div>
+        <div class="stat-val" id="audit-win-rate">—</div>
+        <div class="stat-sub" id="audit-record">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">ROI / P/L</div>
+        <div class="stat-val" id="audit-roi">—</div>
+        <div class="stat-sub" id="audit-pl">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Dataset health</div>
+        <div class="stat-val" id="audit-health">—</div>
+        <div class="stat-sub" id="audit-settled">—</div>
+      </div>
+    </div>
+
+    <div class="section-title">Market audit</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Market</th>
+            <th>Qualified</th>
+            <th>W-L</th>
+            <th>Win rate</th>
+            <th>ROI</th>
+            <th>P/L</th>
+            <th>Signal</th>
+          </tr>
+        </thead>
+        <tbody id="audit-market-body"></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Calibration snapshot</div>
+    <div class="cov-grid audit-grid">
+      <div class="cov-card">
+        <div class="cov-title">By market</div>
+        <div id="audit-calibration-list"></div>
+      </div>
+      <div class="cov-card">
+        <div class="cov-title">Notable buckets</div>
+        <div id="audit-bucket-list"></div>
+      </div>
+    </div>
+
+    <div class="section-title">Central finding</div>
+    <div class="audit-comparison-card" id="audit-k-comparison"></div>
+
+    <div class="section-title">Findings summary</div>
+    <div class="cov-grid audit-grid">
+      <div class="cov-card">
+        <div class="cov-title">Confirmed diagnostics</div>
+        <div id="audit-confirmed-list"></div>
+      </div>
+      <div class="cov-card">
+        <div class="cov-title">Candidate findings</div>
+        <div id="audit-candidate-list"></div>
+      </div>
+    </div>
+
+    <div class="audit-v2" id="audit-v2-summary">—</div>
   </div>
 
   <!-- ── HISTORY PAGE ── -->

@@ -10,6 +10,7 @@ let STATE = {
   dayData: null,
   history: null,
   manifest: null,
+  audit: null,
   activePage: "picks",
   explorerSort: { key: "expected_value_per_100", dir: -1 },
 };
@@ -23,6 +24,8 @@ function fmt(v, decimals = 2) {
 function fmtPct(v) { return v == null ? "—" : fmt(v, 1) + "%"; }
 function fmtOdds(v) { return v == null ? "—" : (v > 0 ? "+" + v : "" + v); }
 function fmtPL(v) { return v == null ? "—" : (v >= 0 ? "+$" + fmt(v) : "-$" + fmt(Math.abs(v))); }
+function fmtROI(v) { return v == null ? "—" : (v >= 0 ? "+" : "") + fmt(v, 1) + "%"; }
+function text(v) { return v == null || v === "" ? "—" : String(v); }
 function selClass(s) {
   const lc = (s || "").toLowerCase();
   return ["over","under","yrfi","nrfi"].includes(lc) ? lc : "";
@@ -63,6 +66,16 @@ async function loadHistory() {
     STATE.history = await r.json();
   } catch (e) {
     STATE.history = { days: [], totals: {} };
+  }
+}
+
+async function loadAudit() {
+  try {
+    const r = await fetch("./data/audit/latest.json");
+    if (!r.ok) throw new Error("Audit export missing");
+    STATE.audit = await r.json();
+  } catch (e) {
+    STATE.audit = null;
   }
 }
 
@@ -439,6 +452,143 @@ function buildDiagCharts(d) {
   }
 }
 
+// ── Audit page ───────────────────────────────────────────────────────────────
+
+function renderAudit() {
+  const a = STATE.audit;
+  const page = el("page-audit");
+  if (!page) return;
+  if (!a) {
+    page.innerHTML = '<p class="empty">No audit export found. Run <code>mlb-prop-edge export-model-lab-dashboard</code>.</p>';
+    return;
+  }
+
+  const s = a.summary || {};
+  const ds = s.dataset || {};
+  el("audit-guardrail").textContent = a.guardrail?.text || "Audit data is diagnostic only.";
+  el("audit-window").textContent = `${a.window?.start_date || "—"} → ${a.window?.end_date || "—"}`;
+  el("audit-qualified").textContent = s.qualified ?? "—";
+  el("audit-roi-eligible").textContent = `${s.roi_eligible ?? "—"} ROI eligible`;
+  el("audit-win-rate").textContent = fmtPct(s.win_rate);
+  el("audit-record").textContent = `${s.wins ?? 0}W / ${s.losses ?? 0}L`;
+  el("audit-roi").textContent = fmtROI(s.roi);
+  el("audit-roi").className = "stat-val " + ((s.roi || 0) >= 0 ? "pos" : "neg");
+  el("audit-pl").textContent = fmtPL(s.profit_loss);
+  el("audit-health").textContent = ds.has_warnings ? "Warnings" : "Clean";
+  el("audit-health").className = "stat-val " + (ds.has_warnings ? "neg" : "pos");
+  el("audit-settled").textContent = `${fmtPct(ds.settled_qualified_percentage)} settled qualified`;
+
+  const marketBody = el("audit-market-body");
+  marketBody.innerHTML = "";
+  (a.markets || []).forEach(row => {
+    const tr = document.createElement("tr");
+    const roiCls = (row.roi || 0) >= 0 ? "pos" : "neg";
+    const plCls = (row.profit_loss || 0) >= 0 ? "pos" : "neg";
+    tr.innerHTML = `
+      <td>${mktBadgeHTML(row.market)}</td>
+      <td>${row.qualified ?? "—"}</td>
+      <td>${row.wins ?? 0}-${row.losses ?? 0}</td>
+      <td>${fmtPct(row.win_rate)}</td>
+      <td class="${roiCls}">${fmtROI(row.roi)}</td>
+      <td class="${plCls}">${fmtPL(row.profit_loss)}</td>
+      <td>${signalBadge(row.signal_strength, row.insufficient_data)}</td>`;
+    marketBody.appendChild(tr);
+  });
+
+  renderCalibrationList(el("audit-calibration-list"), a.calibration?.by_market || []);
+  renderBucketList(el("audit-bucket-list"), a.calibration?.notable_buckets || []);
+  renderKComparison(a.findings?.candidate_findings || []);
+  renderFindingList(el("audit-confirmed-list"), a.findings?.confirmed_diagnostics || []);
+  renderFindingList(el("audit-candidate-list"), a.findings?.candidate_findings || []);
+
+  const v2 = a.v2_test_queue || {};
+  el("audit-v2-summary").textContent = `${v2.public_summary || "Calibration improvements under investigation."} Details omitted from public export. Items under review: ${v2.count ?? 0}.`;
+}
+
+function signalBadge(signal, insufficient) {
+  const cls = insufficient ? "audit-signal weak" : "audit-signal";
+  return `<span class="${cls}">${text(signal).replace(/_/g, " ")}</span>`;
+}
+
+function renderCalibrationList(container, rows) {
+  container.innerHTML = "";
+  if (!rows.length) {
+    container.innerHTML = '<p class="empty">No calibration rows.</p>';
+    return;
+  }
+  rows.forEach(row => {
+    const gap = row.calibration_gap;
+    const gapCls = Math.abs(gap || 0) <= 3 ? "pos" : "neg";
+    container.innerHTML += `<div class="audit-row">
+      <div><strong>${mktLabel(row.market)}</strong><span>${row.qualified ?? "—"} qualified · ${signalBadge(row.signal_strength, row.insufficient_data)}</span></div>
+      <div class="${gapCls}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</div>
+    </div>`;
+  });
+}
+
+function renderBucketList(container, rows) {
+  container.innerHTML = "";
+  if (!rows.length) {
+    container.innerHTML = '<p class="empty">No notable buckets.</p>';
+    return;
+  }
+  rows.forEach(row => {
+    const gap = row.calibration_gap;
+    container.innerHTML += `<div class="audit-row">
+      <div><strong>${mktLabel(row.market)} ${text(row.bucket)}</strong><span>${row.qualified ?? "—"} qualified · win ${fmtPct(row.win_rate)}</span></div>
+      <div class="${Math.abs(gap || 0) <= 3 ? "pos" : "neg"}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</div>
+    </div>`;
+  });
+}
+
+function renderKComparison(rows) {
+  const container = el("audit-k-comparison");
+  if (!container) return;
+  const finding = rows.find(r => r.id === "pitcher_k_unders_structural_miscalibration");
+  const over = finding?.evidence_summary?.overs;
+  const under = finding?.evidence_summary?.unders;
+  if (!finding || !over || !under) {
+    container.innerHTML = '<p class="empty">K Over/Under comparison is unavailable in this export.</p>';
+    return;
+  }
+  container.innerHTML = `<div class="finding-title">${text(finding.title)}</div>
+    <div class="finding-summary">${text(finding.summary)}</div>
+    <div class="audit-compare-grid">
+      ${renderKCompareSide("K Overs", over)}
+      ${renderKCompareSide("K Unders", under)}
+    </div>`;
+}
+
+function renderKCompareSide(label, row) {
+  const roiCls = (row.roi || 0) >= 0 ? "pos" : "neg";
+  const gap = row.calibration_gap;
+  return `<div class="audit-compare-side">
+    <div class="audit-compare-title">${label}</div>
+    <div class="audit-compare-main ${roiCls}">${fmtROI(row.roi)} ROI</div>
+    <div class="audit-compare-row"><span>Record</span><strong>${row.wins ?? 0}-${row.losses ?? 0}</strong></div>
+    <div class="audit-compare-row"><span>Win rate</span><strong>${fmtPct(row.actual_win_rate ?? row.win_rate)}</strong></div>
+    <div class="audit-compare-row"><span>Model avg</span><strong>${fmtPct(row.avg_model_probability)}</strong></div>
+    <div class="audit-compare-row"><span>Calibration gap</span><strong class="${Math.abs(gap || 0) <= 3 ? "pos" : "neg"}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</strong></div>
+    <div class="audit-compare-row"><span>P/L</span><strong class="${roiCls}">${fmtPL(row.profit_loss)}</strong></div>
+  </div>`;
+}
+
+function renderFindingList(container, rows) {
+  container.innerHTML = "";
+  if (!rows.length) {
+    container.innerHTML = '<p class="empty">No findings in export.</p>';
+    return;
+  }
+  rows.forEach(row => {
+    const div = document.createElement("div");
+    div.className = "finding-card";
+    div.innerHTML = `<div class="finding-title">${text(row.title)}</div>
+      <div class="finding-summary">${text(row.summary)}</div>
+      <div class="finding-action">${text(row.actionability).replace(/_/g, " ")}</div>`;
+    container.appendChild(div);
+  });
+}
+
 // ── History page ─────────────────────────────────────────────────────────────
 
 let plChart, wlChart;
@@ -528,6 +678,7 @@ function showPage(name) {
 
   if (name === "explorer") renderExplorer();
   if (name === "diagnostics") renderDiagnostics();
+  if (name === "audit") renderAudit();
   if (name === "history") renderHistory();
 }
 
@@ -536,6 +687,7 @@ function renderAll() {
   renderPicksPage();
   if (STATE.activePage === "explorer") renderExplorer();
   if (STATE.activePage === "diagnostics") renderDiagnostics();
+  if (STATE.activePage === "audit") renderAudit();
   if (STATE.activePage === "history") renderHistory();
 }
 
@@ -546,6 +698,7 @@ async function boot() {
 
   await loadManifest();
   await loadHistory();
+  await loadAudit();
 
   const latestDate = STATE.manifest?.latest;
   if (!latestDate) {

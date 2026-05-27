@@ -141,6 +141,31 @@ tr:hover td { background: var(--bg-subtle); }
 .badge-q  { background: var(--green-bg); color: var(--green); font-size: 10px; padding: 1px 6px; border-radius: 3px; }
 .badge-nq { background: var(--bg-subtle); color: var(--text-tertiary); font-size: 10px; padding: 1px 6px; border-radius: 3px; }
 
+/* ── Audit ── */
+.audit-banner { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(133,79,11,0.35); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 1rem; font-size: 12px; font-weight: 600; }
+.audit-window { font-size: 17px; }
+.audit-grid { align-items: start; }
+.audit-row { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 0.5px solid var(--border-light); font-size: 12px; }
+.audit-row:last-child { border-bottom: none; }
+.audit-row strong { display: block; font-size: 12px; font-weight: 600; }
+.audit-row span { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: 10px; }
+.audit-signal { display: inline-block; background: var(--green-bg); color: var(--green); border-radius: 4px; padding: 1px 6px; font-size: 10px; }
+.audit-signal.weak { background: var(--amber-bg); color: var(--amber); }
+.finding-card { padding: 10px 0; border-bottom: 0.5px solid var(--border-light); }
+.finding-card:last-child { border-bottom: none; }
+.finding-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.finding-summary { font-size: 11px; color: var(--text-secondary); }
+.finding-action { display: inline-block; margin-top: 6px; background: var(--bg-subtle); color: var(--text-secondary); border-radius: 4px; padding: 2px 6px; font-size: 10px; }
+.audit-v2 { background: var(--bg-subtle); color: var(--text-secondary); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 1rem; font-size: 12px; }
+.audit-comparison-card { background: var(--bg-surface); border: 1px solid var(--border-med); border-radius: var(--radius-md); padding: 14px; margin-bottom: 1.25rem; }
+.audit-compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.audit-compare-side { background: var(--bg-subtle); border-radius: var(--radius-sm); padding: 12px; }
+.audit-compare-title { font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.audit-compare-main { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.audit-compare-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 4px 0; border-bottom: 0.5px solid var(--border-light); }
+.audit-compare-row:last-child { border-bottom: none; }
+.audit-compare-row span { color: var(--text-secondary); }
+
 /* ── History ── */
 .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
 .chart-card { background: var(--bg-surface); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: 14px; }
