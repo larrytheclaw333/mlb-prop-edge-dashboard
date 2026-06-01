@@ -52,9 +52,10 @@ async function loadManifest() {
 }
 
 async function loadDay(date) {
-  const url = date === STATE.manifest?.latest
-    ? "./data/latest.json"
-    : `./data/daily/${date}.json`;
+  // Always load the immutable dated export for a selected date.  The moving
+  // latest.json alias can be newer than a cached manifest, which made an old
+  // "latest" option (for example 2026-05-27) display newer picks.
+  const url = `./data/daily/${date}.json`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Failed to load ${url}`);
   return r.json();
