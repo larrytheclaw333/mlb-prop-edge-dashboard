@@ -243,15 +243,6 @@ function renderPicksPage() {
   } else {
     d.picks.forEach(p => pl.appendChild(buildPickCard(p, true)));
   }
-
-  // Qualified
-  const ql = el("qualified-list");
-  ql.innerHTML = "";
-  if (!d.qualified || d.qualified.length === 0) {
-    ql.innerHTML = '<p class="empty">No qualified candidates for this date.</p>';
-  } else {
-    d.qualified.forEach(q => ql.appendChild(buildPickCard(q, false)));
-  }
 }
 
 // ── Explorer page ────────────────────────────────────────────────────────────
