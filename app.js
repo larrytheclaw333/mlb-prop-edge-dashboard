@@ -50,6 +50,14 @@ function resultUnit(market, value) {
   if (market === "nrfi_yrfi") return "runs";
   return "units";
 }
+function statcastStatusLabel(status) {
+  return {
+    matched: "eligible sample",
+    sample_below_threshold: "below blend threshold",
+    missing_required_fields: "missing required fields",
+    no_statcast_match: "not matched",
+  }[status] || (status ? status.replace(/_/g, " ") : "—");
+}
 function resultDeltaHTML(c) {
   const status = c.status || "pending";
   if (!["settled_win", "settled_loss", "push"].includes(status)) return "";
@@ -233,7 +241,9 @@ function buildPickCard(c, isPick) {
   } else if (c.market === "batter_hits") {
     detailRows = [
       ["AVG / xBA", `${fmt(c.batter_avg, 3)} / ${c.batter_xba != null ? fmt(c.batter_xba, 3) : "—"}`],
-      ["xBA available", c.xba_available ? "yes" : "no"],
+      ["Baseline AVG", fmt(c.baseline_avg, 3)],
+      ["xBA sample", c.statcast_pa != null ? `${c.statcast_pa} PA · ${statcastStatusLabel(c.statcast_match_status)}` : statcastStatusLabel(c.statcast_match_status)],
+      ["xBA blend eligible", c.xba_available ? "yes" : "no"],
       ["xBA blend used", c.xba_blend_used ? "yes" : "no"],
       ["Season PA", c.season_pa ?? "—"],
       ["Lineup spot", c.lineup_spot != null ? "#" + c.lineup_spot : "—"],
