@@ -26,6 +26,11 @@ function fmtPct(v) { return v == null ? "—" : fmt(v, 1) + "%"; }
 function fmtOdds(v) { return v == null ? "—" : (v > 0 ? "+" + v : "" + v); }
 function fmtPL(v) { return v == null ? "—" : (v >= 0 ? "+$" + fmt(v) : "-$" + fmt(Math.abs(v))); }
 function fmtROI(v) { return v == null ? "—" : (v >= 0 ? "+" : "") + fmt(v, 1) + "%"; }
+function fmtLine(v) {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  return Number.isFinite(n) ? String(Math.round(n * 10) / 10) : String(v);
+}
 function text(v) { return v == null || v === "" ? "—" : String(v); }
 function selClass(s) {
   const lc = (s || "").toLowerCase();
@@ -37,6 +42,39 @@ function mktLabel(m) {
 function mktBadgeHTML(m) {
   const cls = { pitcher_strikeouts: "mkt-k", batter_hits: "mkt-hits", nrfi_yrfi: "mkt-nrfi" }[m] || "mkt-k";
   return `<span class="mkt-badge ${cls}">${mktLabel(m)}</span>`;
+}
+function resultUnit(market, value) {
+  const n = Number(value);
+  if (market === "pitcher_strikeouts") return "Ks";
+  if (market === "batter_hits") return Math.abs(n) === 1 ? "hit" : "hits";
+  if (market === "nrfi_yrfi") return "runs";
+  return "units";
+}
+function resultDeltaHTML(c) {
+  const status = c.status || "pending";
+  if (!["settled_win", "settled_loss", "push"].includes(status)) return "";
+
+  const line = Number(c.line);
+  const actual = Number(c.result_value);
+  if (!Number.isFinite(line) || !Number.isFinite(actual)) return "";
+
+  const selection = (c.selection || "").toLowerCase();
+  let margin = null;
+  if (selection === "over" || selection === "yrfi") {
+    margin = actual - line;
+  } else if (selection === "under" || selection === "nrfi") {
+    margin = line - actual;
+  }
+  if (margin == null) return "";
+
+  const unit = resultUnit(c.market, Math.abs(margin));
+  if (status === "push" || Math.abs(margin) < 0.0001) {
+    return `<span class="result-delta result-push-delta">Pushed at ${fmtLine(line)} ${unit}</span>`;
+  }
+
+  const label = margin > 0 ? "Cleared" : "Missed";
+  const cls = margin > 0 ? "result-delta-win" : "result-delta-loss";
+  return `<span class="result-delta ${cls}">${label} by ${fmtLine(Math.abs(margin))} ${unit}</span>`;
 }
 function el(id) { return document.getElementById(id); }
 function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
@@ -168,10 +206,13 @@ function buildPickCard(c, isPick) {
 
   // Result badge
   let resultHTML = "";
+  const deltaHTML = resultDeltaHTML(c);
   if (c.win === true) {
-    resultHTML = `<div class="result-row"><span class="result-badge result-win">Win</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${c.profit_loss != null ? `<span class="result-text pos">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
+    resultHTML = `<div class="result-row"><span class="result-badge result-win">Win</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${deltaHTML}${c.profit_loss != null ? `<span class="result-text pos">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
   } else if (c.win === false) {
-    resultHTML = `<div class="result-row"><span class="result-badge result-loss">Loss</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${c.profit_loss != null ? `<span class="result-text neg">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
+    resultHTML = `<div class="result-row"><span class="result-badge result-loss">Loss</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${deltaHTML}${c.profit_loss != null ? `<span class="result-text neg">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
+  } else if (c.status === "push") {
+    resultHTML = `<div class="result-row"><span class="result-badge result-push">Push</span>${c.result ? `<span class="result-text">${c.result}</span>` : ""}${deltaHTML}${c.profit_loss != null ? `<span class="result-text">${fmtPL(c.profit_loss)}</span>` : ""}</div>`;
   } else {
     resultHTML = `<div class="result-row"><span class="result-badge result-pending">Pending</span></div>`;
   }

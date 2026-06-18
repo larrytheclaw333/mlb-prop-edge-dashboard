@@ -122,8 +122,13 @@ select.date-sel:focus { outline: none; border-color: var(--blue); }
 .result-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
 .result-win  { background: var(--green-bg); color: var(--green); }
 .result-loss { background: var(--red-bg); color: var(--red); }
+.result-push { background: var(--bg-subtle); color: var(--text-secondary); }
 .result-pending { background: var(--bg-subtle); color: var(--text-tertiary); }
 .result-text { font-size: 11px; color: var(--text-secondary); }
+.result-delta { font-size: 11px; font-weight: 500; padding: 1px 6px; border-radius: 4px; }
+.result-delta-win { background: var(--green-bg); color: var(--green); }
+.result-delta-loss { background: var(--red-bg); color: var(--red); }
+.result-push-delta { background: var(--bg-subtle); color: var(--text-secondary); }
 
 /* ── Pick detail (expandable) ── */
 .pick-detail { display: none; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border-light); }
