@@ -58,6 +58,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Sego
 .nav-btn:hover:not(.active) { background: var(--bg-subtle); color: var(--text-primary); }
 
 .date-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+.date-bar[hidden] { display: none; }
 .date-bar label { font-size: 11px; color: var(--text-secondary); }
 select.date-sel { font-size: 12px; padding: 4px 10px; border: 0.5px solid var(--border-med); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary); cursor: pointer; }
 select.date-sel:focus { outline: none; border-color: var(--blue); }
