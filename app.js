@@ -766,16 +766,65 @@ function renderHistory() {
   el("pl-chart-title").textContent = selected.chartTitle;
   el("wl-chart-title").textContent = `${selected.label} daily wins / losses / pending`;
 
-  buildHistoryCharts(selected.days);
+  buildHistoryCharts(selected.days, scope, boundary, currentVersion);
 }
 
-function buildHistoryCharts(days) {
+function historyBoundaryMarker(scope, days, boundary, currentVersion) {
+  const effectiveDate = boundary?.effective_date;
+  if (!effectiveDate || scope === "v1") return null;
+  if (scope === "v2" && days.length < 3) return null;
+  if (!days.some(d => d.date === effectiveDate)) return null;
+  return {
+    date: effectiveDate,
+    label: `${currentVersion || "v2"} starts ${effectiveDate}`,
+  };
+}
+
+function chartBoundaryPlugin(marker) {
+  return {
+    id: "modelBoundaryMarker",
+    afterDatasetsDraw(chart) {
+      if (!marker) return;
+      const labels = chart.data?.labels || [];
+      const index = labels.indexOf(marker.date);
+      if (index < 0) return;
+
+      const { ctx, chartArea, scales } = chart;
+      const x = scales.x.getPixelForValue(index);
+      const alignRight = x > chartArea.left + 120;
+      const labelX = x + (alignRight ? -6 : 6);
+      const textColor = getComputedStyle(document.documentElement)
+        .getPropertyValue("--text-secondary")
+        .trim() || "#6b6b66";
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(87, 78, 190, 0.55)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = textColor;
+      ctx.font = "10px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = alignRight ? "right" : "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(marker.label, labelX, chartArea.top + 4);
+      ctx.restore();
+    }
+  };
+}
+
+function buildHistoryCharts(days, scope = "v2", boundary = {}, currentVersion = "v2") {
   let scopedCumulativePL = 0;
   const scopedDays = days.map(d => {
     if (d.settled) scopedCumulativePL = Math.round((scopedCumulativePL + (d.profit_loss || 0)) * 100) / 100;
     return { ...d, scoped_cumulative_pl: scopedCumulativePL };
   });
   const labels = scopedDays.map(d => d.date);
+  const boundaryMarker = historyBoundaryMarker(scope, scopedDays, boundary, currentVersion);
 
   if (plChart) plChart.destroy();
   const plCtx = el("pl-chart");
@@ -801,7 +850,8 @@ function buildHistoryCharts(days) {
           x: { ticks: { maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
           y: { grid: { color: "rgba(128,128,128,0.1)" }, ticks: { callback: v => "$" + v } }
         }
-      }
+      },
+      plugins: [chartBoundaryPlugin(boundaryMarker)]
     });
   }
 
