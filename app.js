@@ -58,6 +58,31 @@ function statcastStatusLabel(status) {
     no_statcast_match: "not matched",
   }[status] || (status ? status.replace(/_/g, " ") : "—");
 }
+function handLabel(hand) {
+  const h = (hand || "").toUpperCase();
+  if (h === "R" || h === "L") return `${h}HP`;
+  return "—";
+}
+function lineupSideLabel(side) {
+  const s = (side || "").toUpperCase();
+  if (s === "R" || s === "L") return `${s}-heavy lineup`;
+  return "lineup context";
+}
+function reasonLabel(reason) {
+  return reason ? reason.replace(/_/g, " ") : "unavailable";
+}
+function platoonRows(c) {
+  if (c.platoon_context_available === true) {
+    return [
+      ["Platoon context", `${handLabel(c.pitcher_hand)} vs ${lineupSideLabel(c.dominant_batter_side)}`],
+      ["Lineup bats", `${c.right_batter_count ?? 0}R · ${c.left_batter_count ?? 0}L · ${c.switch_inferred_count ?? 0}S`],
+    ];
+  }
+  if (c.platoon_context_available === false) {
+    return [["Platoon context", reasonLabel(c.platoon_context_unavailable_reason)]];
+  }
+  return [];
+}
 function resultDeltaHTML(c) {
   const status = c.status || "pending";
   if (!["settled_win", "settled_loss", "push"].includes(status)) return "";
@@ -232,6 +257,7 @@ function buildPickCard(c, isPick) {
       ["Projected Ks", fmt(c.projected_ks, 2)],
       ["IP / start", fmt(c.ip_per_start, 2)],
       ["Starter role", c.starter_role ? c.starter_role.replace(/_/g, " ") : "—"],
+      ...platoonRows(c),
       ["Opp K adjustment", fmt(c.opponent_k_adjustment, 3)],
       ["Baseball prob", fmtPct(c.baseball_probability)],
       ["Consensus prob", fmtPct(c.consensus_probability)],
