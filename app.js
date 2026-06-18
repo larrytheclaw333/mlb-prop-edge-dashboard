@@ -762,6 +762,7 @@ function showPage(name) {
   if (pageEl) pageEl.classList.add("active");
   document.querySelector(`.nav-btn[data-page="${name}"]`)?.classList.add("active");
   STATE.activePage = name;
+  document.querySelector(".date-bar")?.toggleAttribute("hidden", name === "history");
 
   if (name === "explorer") renderExplorer();
   if (name === "diagnostics") renderDiagnostics();
