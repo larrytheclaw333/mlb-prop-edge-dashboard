@@ -12,6 +12,7 @@ let STATE = {
   manifest: null,
   audit: null,
   activePage: "picks",
+  performanceScope: "v2",
   explorerSort: { key: "expected_value_per_100", dir: -1 },
 };
 
@@ -39,6 +40,26 @@ function mktBadgeHTML(m) {
 }
 function el(id) { return document.getElementById(id); }
 function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+function versionBoundary() {
+  return STATE.history?.model_version_boundary || {};
+}
+function dayModelVersion(day) {
+  return day?.summary?.model_version || day?.candidates_meta?.model_version || null;
+}
+function dayVersionState(day) {
+  const boundary = versionBoundary();
+  const current = boundary.current_version || "v2";
+  const effective = boundary.effective_date || "2026-06-18";
+  const version = dayModelVersion(day);
+  if (version === current) return { kind: "current", version, current, effective };
+  return { kind: "archive", version: version || "v1 archive", current, effective };
+}
+function dateRangeLabel(days) {
+  if (!days.length) return "no dates yet";
+  const dates = days.map(d => d.date).filter(Boolean);
+  if (!dates.length) return "no dates yet";
+  return dates[0] === dates[dates.length - 1] ? dates[0] : `${dates[0]}–${dates[dates.length - 1]}`;
+}
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -112,6 +133,27 @@ function renderMeta() {
   const windows = cm.window_count || cm.source_windows?.length || 1;
   el("run-meta").textContent =
     `${d.run_date} · ${windows} window${windows !== 1 ? "s" : ""} · ${d.summary.total_candidates} candidates`;
+}
+
+function renderVersionBanner() {
+  const banner = el("version-banner");
+  if (!banner || !STATE.dayData) return;
+  const title = el("version-title");
+  const copy = el("version-copy");
+  const pill = el("version-pill");
+  const boundary = versionBoundary();
+  const state = dayVersionState(STATE.dayData);
+  banner.classList.toggle("archive", state.kind !== "current");
+
+  if (state.kind === "current") {
+    title.textContent = `Model ${state.current} active`;
+    copy.textContent = `${boundary.description || "Current production baseline"} Baseline starts ${state.effective}.`;
+    pill.textContent = state.current;
+  } else {
+    title.textContent = "Viewing archived baseline";
+    copy.textContent = `This date is outside the ${state.current} reporting baseline that starts ${state.effective}.`;
+    pill.textContent = state.version;
+  }
 }
 
 // ── Picks page ───────────────────────────────────────────────────────────────
@@ -591,19 +633,72 @@ function renderHistory() {
     el("hist-content").innerHTML = '<p class="empty">No history data yet. Run <code>mlb-prop-edge export-dashboard-static</code> with multiple dates.</p>';
     return;
   }
-  const t = h.totals;
+  const boundary = h.model_version_boundary || {};
+  const currentVersion = boundary.current_version || "v2";
+  const scope = STATE.performanceScope || "v2";
+  const currentDays = h.days.filter(d => d.model_version === currentVersion);
+  const archiveDays = h.days.filter(d => d.model_version !== currentVersion);
+  const scopeMap = {
+    v2: {
+      label: `${currentVersion} current`,
+      picksLabel: `${currentVersion} picks`,
+      plLabel: `${currentVersion} P/L`,
+      totals: h.current_model_totals || {},
+      days: currentDays,
+      description: `${currentVersion} current baseline · starts ${boundary.effective_date || "2026-06-18"} · default view`,
+      chartTitle: `${currentVersion} cumulative P/L`,
+    },
+    v1: {
+      label: "v1 archive",
+      picksLabel: "v1 picks",
+      plLabel: "v1 P/L",
+      totals: h.archive_totals || {},
+      days: archiveDays,
+      description: `v1 archive · ${dateRangeLabel(archiveDays)} · historical baseline`,
+      chartTitle: "v1 cumulative P/L",
+    },
+    all: {
+      label: "all time",
+      picksLabel: "all-time picks",
+      plLabel: "all-time P/L",
+      totals: h.totals || {},
+      days: h.days,
+      description: `All time / v1 + ${currentVersion} · includes archived drawdown`,
+      chartTitle: "All-time cumulative P/L",
+    },
+  };
+  const selected = scopeMap[scope] || scopeMap.v2;
+  const t = selected.totals;
+  const archive = h.archive_totals || {};
+  const current = h.current_model_totals || {};
 
+  document.querySelectorAll("[data-history-scope]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.historyScope === scope);
+  });
+  el("hist-picks-label").textContent = selected.picksLabel;
   el("hist-picks").textContent = t.total_picks ?? "—";
   el("hist-wins").textContent = t.total_wins ?? "—";
   el("hist-losses").textContent = t.total_losses ?? "—";
   el("hist-wr").textContent = t.win_rate != null ? t.win_rate + "%" : "—";
+  el("hist-pl-label").textContent = selected.plLabel;
   el("hist-pl").textContent = fmtPL(t.cumulative_pl);
+  el("history-scope").textContent = selected.description;
+  el("archive-summary").textContent =
+    `${currentVersion}: ${current.total_picks ?? 0} picks, ${fmtPL(current.cumulative_pl || 0)} P/L. ` +
+    `v1 archive: ${archive.total_picks ?? 0} picks, ${fmtPL(archive.cumulative_pl || 0)} P/L.`;
+  el("pl-chart-title").textContent = selected.chartTitle;
+  el("wl-chart-title").textContent = `${selected.label} daily wins / losses / pending`;
 
-  buildHistoryCharts(h.days);
+  buildHistoryCharts(selected.days);
 }
 
 function buildHistoryCharts(days) {
-  const labels = days.map(d => d.date);
+  let scopedCumulativePL = 0;
+  const scopedDays = days.map(d => {
+    if (d.settled) scopedCumulativePL = Math.round((scopedCumulativePL + (d.profit_loss || 0)) * 100) / 100;
+    return { ...d, scoped_cumulative_pl: scopedCumulativePL };
+  });
+  const labels = scopedDays.map(d => d.date);
 
   if (plChart) plChart.destroy();
   const plCtx = el("pl-chart");
@@ -614,7 +709,7 @@ function buildHistoryCharts(days) {
         labels,
         datasets: [{
           label: "Cumulative P/L",
-          data: days.map(d => d.cumulative_pl),
+          data: scopedDays.map(d => d.scoped_cumulative_pl),
           borderColor: "#378ADD",
           backgroundColor: "rgba(55,138,221,0.08)",
           fill: true,
@@ -641,9 +736,9 @@ function buildHistoryCharts(days) {
       data: {
         labels,
         datasets: [
-          { label: "Wins", data: days.map(d => d.wins), backgroundColor: "#3B6D11" },
-          { label: "Losses", data: days.map(d => d.losses), backgroundColor: "#A32D2D" },
-          { label: "Pending", data: days.map(d => d.pending), backgroundColor: "#B5D4F4" },
+          { label: "Wins", data: scopedDays.map(d => d.wins), backgroundColor: "#3B6D11" },
+          { label: "Losses", data: scopedDays.map(d => d.losses), backgroundColor: "#A32D2D" },
+          { label: "Pending", data: scopedDays.map(d => d.pending), backgroundColor: "#B5D4F4" },
         ]
       },
       options: {
@@ -674,8 +769,30 @@ function showPage(name) {
   if (name === "history") renderHistory();
 }
 
+function setupHistoryScopeControls() {
+  try {
+    const savedScope = sessionStorage.getItem("mlbPropHistoryScope");
+    if (["v2", "v1", "all"].includes(savedScope)) STATE.performanceScope = savedScope;
+  } catch (e) {
+    STATE.performanceScope = "v2";
+  }
+
+  document.querySelectorAll("[data-history-scope]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.performanceScope = btn.dataset.historyScope || "v2";
+      try {
+        sessionStorage.setItem("mlbPropHistoryScope", STATE.performanceScope);
+      } catch (e) {
+        // Session storage is a convenience only; v2 remains the fresh-load default.
+      }
+      renderHistory();
+    });
+  });
+}
+
 function renderAll() {
   renderMeta();
+  renderVersionBanner();
   renderPicksPage();
   if (STATE.activePage === "explorer") renderExplorer();
   if (STATE.activePage === "diagnostics") renderDiagnostics();
@@ -704,6 +821,7 @@ async function boot() {
 
   buildDatePicker();
   setupExplorerSort();
+  setupHistoryScopeControls();
 
   document.querySelectorAll(".nav-btn[data-page]").forEach(btn => {
     btn.addEventListener("click", () => showPage(btn.dataset.page));

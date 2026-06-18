@@ -63,6 +63,13 @@ select.date-sel { font-size: 12px; padding: 4px 10px; border: 0.5px solid var(--
 select.date-sel:focus { outline: none; border-color: var(--blue); }
 .loading { font-size: 12px; color: var(--text-tertiary); padding: 2rem 0; text-align: center; }
 
+.version-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 1.25rem; padding: 12px 14px; background: var(--bg-surface); border: 0.5px solid var(--border-light); border-left: 3px solid var(--blue); border-radius: var(--radius-sm); }
+.version-title { font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+.version-copy { font-size: 11px; color: var(--text-secondary); }
+.version-pill { flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #E6F1FB; color: #185FA5; border: 0.5px solid var(--border-light); }
+.version-banner.archive { border-left-color: var(--amber); }
+.version-banner.archive .version-pill { background: var(--amber-bg); color: var(--amber); }
+
 /* ── Pages ── */
 .page { display: none; }
 .page.active { display: block; }
@@ -73,6 +80,13 @@ select.date-sel:focus { outline: none; border-color: var(--blue); }
 .stat-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .stat-val { font-size: 22px; font-weight: 500; line-height: 1.1; }
 .stat-sub { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+
+.scope-control { display: inline-flex; gap: 3px; padding: 3px; margin-bottom: 12px; border: 0.5px solid var(--border-light); border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.scope-btn { min-width: 68px; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 500; padding: 5px 10px; transition: background 0.12s, color 0.12s; }
+.scope-btn:hover { color: var(--text-primary); }
+.scope-btn.active { background: var(--bg-surface); color: var(--text-primary); box-shadow: 0 0 0 0.5px var(--border-light); }
+.history-scope { margin: -2px 0 8px; font-size: 11px; color: var(--text-secondary); }
+.archive-summary { margin-bottom: 1.25rem; padding: 9px 11px; border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text-secondary); font-size: 11px; }
 
 /* ── Section title ── */
 .section-title { font-size: 10px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; margin-top: 1.5rem; }
