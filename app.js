@@ -69,7 +69,46 @@ function lineupSideLabel(side) {
   return "lineup context";
 }
 function reasonLabel(reason) {
+  if (reason === "pitcher_k_over_one_book_edge_penalty") return "K Over one-book edge penalty";
+  if (reason === "pitcher_k_under_guardrail") return "K Under guardrail";
   return reason ? reason.replace(/_/g, " ") : "unavailable";
+}
+function bookLabel(book) {
+  return text(book).replace(/_/g, " ");
+}
+function pp(v, decimals = 2) {
+  return v == null ? "—" : `${fmt(v, decimals)}pp`;
+}
+function marketAnchorRows(c) {
+  if (c.market_anchor_type === "one_book") {
+    const fairProb = c.one_book_fair_probability ?? c.selected_book_fair_probability ?? c.consensus_probability;
+    return [
+      ["Market anchor", `one book (${bookLabel(c.selected_book || c.book)})`],
+      ["One-book fair prob", fmtPct(fairProb)],
+    ];
+  }
+  if (c.market_anchor_type === "true_consensus") {
+    const books = c.consensus_books != null ? `${c.consensus_books} books` : "multi-book";
+    return [
+      ["Market anchor", `true consensus (${books})`],
+      ["True consensus prob", fmtPct(c.true_consensus_probability ?? c.consensus_probability)],
+    ];
+  }
+  return [
+    ["Market anchor", "legacy / unspecified"],
+    ["Market fair prob (legacy)", fmtPct(c.consensus_probability)],
+  ];
+}
+function edgeRequirementRows(c) {
+  const effective = c.effective_edge_required ?? c.min_edge_required;
+  if (effective == null) return [];
+  const base = c.base_edge_required;
+  const extra = c.one_book_extra_edge_required;
+  let value = pp(effective);
+  if (base != null && extra != null && Number(extra) > 0) {
+    value = `${pp(effective)} (${pp(base)} base + ${pp(extra)} one-book)`;
+  }
+  return [["Edge required", value]];
 }
 function platoonRows(c) {
   if (c.platoon_context_available === true) {
@@ -260,8 +299,9 @@ function buildPickCard(c, isPick) {
       ...platoonRows(c),
       ["Opp K adjustment", fmt(c.opponent_k_adjustment, 3)],
       ["Baseball prob", fmtPct(c.baseball_probability)],
-      ["Consensus prob", fmtPct(c.consensus_probability)],
+      ...marketAnchorRows(c),
       ["Model weight", c.baseball_weight != null ? (c.baseball_weight * 100).toFixed(0) + "%" : "—"],
+      ...edgeRequirementRows(c),
       ["Park factor", fmt(c.park_hit_factor, 2)],
     ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
   } else if (c.market === "batter_hits") {
