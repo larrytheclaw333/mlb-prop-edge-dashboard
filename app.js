@@ -112,9 +112,14 @@ function edgeRequirementRows(c) {
 }
 function platoonRows(c) {
   if (c.platoon_context_available === true) {
+    const right = c.right_batter_count ?? 0;
+    const left = c.left_batter_count ?? 0;
+    const total = c.total_batter_count ?? right + left;
+    const switchInferred = c.switch_inferred_count ?? 0;
+    const switchNote = switchInferred > 0 ? ` (${switchInferred} switch inferred)` : "";
     return [
       ["Platoon context", `${handLabel(c.pitcher_hand)} vs ${lineupSideLabel(c.dominant_batter_side)}`],
-      ["Lineup bats", `${c.right_batter_count ?? 0}R · ${c.left_batter_count ?? 0}L · ${c.switch_inferred_count ?? 0}S`],
+      ["Lineup bats", `${right}R · ${left}L / ${total} batters${switchNote}`],
     ];
   }
   if (c.platoon_context_available === false) {
