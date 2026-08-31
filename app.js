@@ -170,6 +170,19 @@ function dateRangeLabel(days) {
   if (!dates.length) return "no dates yet";
   return dates[0] === dates[dates.length - 1] ? dates[0] : `${dates[0]}–${dates[dates.length - 1]}`;
 }
+function setText(id, value) {
+  const node = el(id);
+  if (node) node.textContent = value;
+}
+function selectedPauseState() {
+  return STATE.dayData?.summary?.coverage?.pick_emission_pause || {};
+}
+function pauseActive() {
+  return selectedPauseState().active === true;
+}
+function sumValues(row) {
+  return Object.values(row || {}).reduce((total, value) => total + (Number(value) || 0), 0);
+}
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -264,6 +277,27 @@ function renderVersionBanner() {
     copy.textContent = `This date is outside the ${state.current} reporting baseline that starts ${state.effective}.`;
     pill.textContent = state.version;
   }
+}
+
+function renderPublicStatusBanner() {
+  const banner = el("public-status-banner");
+  if (!banner || !STATE.dayData) return;
+
+  const pause = selectedPauseState();
+  if (pause.active !== true) {
+    banner.hidden = true;
+    return;
+  }
+
+  const policySignals = sumValues(pause.after_policy_qualified_by_market);
+  const markets = (pause.paused_markets || []).map(mktLabel).join(", ") || "baseball markets";
+  banner.hidden = false;
+  setText("public-status-title", "Pick emission paused");
+  setText(
+    "public-status-copy",
+    `${markets} are diagnostic only. Current rows are model/audit signals, not active betting recommendations. Policy-qualified signals today: ${policySignals}.`
+  );
+  setText("public-status-pill", "Diagnostic only");
 }
 
 // ── Picks page ───────────────────────────────────────────────────────────────
@@ -379,6 +413,9 @@ function renderPicksPage() {
   const d = STATE.dayData;
   if (!d) return;
   const s = d.summary;
+  const paused = pauseActive();
+  const pause = selectedPauseState();
+  const diagnosticSignals = sumValues(pause.after_policy_qualified_by_market);
 
   // Summary stats
   const winLabel = s.wins > 0 || s.losses > 0
@@ -389,16 +426,25 @@ function renderPicksPage() {
     : "no settled bets";
 
   el("stat-total").textContent = s.total_candidates;
-  el("stat-qualified").textContent = s.qualified_count;
+  el("stat-qualified").textContent = paused ? diagnosticSignals : s.qualified_count;
   el("stat-picks").textContent = s.picks_count;
   el("stat-pl").textContent = plLabel;
-  el("stat-record").textContent = winLabel;
+  setText("stat-qualified-label", paused ? "Diagnostic signals" : "Qualified");
+  setText(
+    "stat-qualified-sub",
+    paused ? "would meet policy gates; emission paused" : "met edge + EV threshold"
+  );
+  setText("stat-picks-label", paused ? "Published picks" : "Final picks");
+  el("stat-record").textContent = paused ? "emission paused" : winLabel;
+  setText("picks-section-title", paused ? "Published picks" : "Final picks");
 
   // Picks
   const pl = el("picks-list");
   pl.innerHTML = "";
   if (!d.picks || d.picks.length === 0) {
-    pl.innerHTML = '<p class="empty">No final picks for this date.</p>';
+    pl.innerHTML = paused
+      ? '<p class="empty">No published picks for this date. Current model rows are diagnostic only.</p>'
+      : '<p class="empty">No final picks for this date.</p>';
   } else {
     d.picks.forEach(p => pl.appendChild(buildPickCard(p, true)));
   }
@@ -412,10 +458,29 @@ let explorerSortDir = -1;
 function renderExplorer() {
   const d = STATE.dayData;
   if (!d) return;
+  const paused = pauseActive();
 
   const mktF = el("f-market").value;
   const qualF = el("f-qual").value;
   const selF = el("f-sel").value;
+  const qualSelect = el("f-qual");
+  const explorerNote = el("explorer-note");
+  const qualHeader = el("explorer-qual-header");
+
+  if (qualSelect) {
+    qualSelect.options[0].textContent = paused ? "All rows" : "All candidates";
+    qualSelect.options[1].textContent = paused ? "Published picks" : "Qualified only";
+    qualSelect.options[2].textContent = paused ? "Diagnostics only" : "Not qualified";
+  }
+  if (explorerNote) {
+    explorerNote.hidden = !paused;
+    explorerNote.textContent = paused
+      ? "Explorer rows are diagnostic model/audit signals while pick emission is paused."
+      : "";
+  }
+  if (qualHeader) {
+    qualHeader.innerHTML = `${paused ? "Status" : "Qual"} <span class="sort-arrow">↕</span>`;
+  }
 
   let data = (d.all_candidates || []).slice();
   if (mktF) data = data.filter(c => c.market === mktF);
@@ -449,7 +514,7 @@ function renderExplorer() {
       <td>${fmtPct(c.implied_probability)}</td>
       <td class="${ecls}">${edge >= 0 ? "+" : ""}${fmt(edge, 2)}</td>
       <td>$${fmt(c.expected_value_per_100, 2)}</td>
-      <td><span class="${c.qualified ? "badge-q" : "badge-nq"}">${c.qualified ? "yes" : "no"}</span></td>`;
+      <td><span class="${c.qualified ? "badge-q" : "badge-nq"}">${paused ? (c.qualified ? "published" : "diagnostic") : (c.qualified ? "yes" : "no")}</span></td>`;
     tbody.appendChild(row);
   });
 
@@ -961,6 +1026,7 @@ function setupHistoryScopeControls() {
 function renderAll() {
   renderMeta();
   renderVersionBanner();
+  renderPublicStatusBanner();
   renderPicksPage();
   if (STATE.activePage === "explorer") renderExplorer();
   if (STATE.activePage === "diagnostics") renderDiagnostics();

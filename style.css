@@ -71,6 +71,12 @@ select.date-sel:focus { outline: none; border-color: var(--blue); }
 .version-banner.archive { border-left-color: var(--amber); }
 .version-banner.archive .version-pill { background: var(--amber-bg); color: var(--amber); }
 
+.public-status-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 1.25rem; padding: 12px 14px; background: var(--amber-bg); border: 1px solid rgba(133,79,11,0.35); border-left: 3px solid var(--amber); border-radius: var(--radius-sm); }
+.public-status-banner[hidden] { display: none; }
+.public-status-title { font-size: 12px; font-weight: 700; color: var(--amber); margin-bottom: 2px; }
+.public-status-copy { font-size: 11px; color: var(--text-secondary); }
+.public-status-pill { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--bg-surface); color: var(--amber); border: 0.5px solid rgba(133,79,11,0.35); }
+
 /* ── Pages ── */
 .page { display: none; }
 .page.active { display: block; }
@@ -148,6 +154,8 @@ select.date-sel:focus { outline: none; border-color: var(--blue); }
 .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .filter-sel { font-size: 12px; padding: 5px 10px; border: 0.5px solid var(--border-med); border-radius: 6px; background: var(--bg-surface); color: var(--text-primary); cursor: pointer; }
 .filter-sel:focus { outline: none; border-color: var(--blue); }
+.explorer-note { margin: -2px 0 10px; padding: 8px 10px; background: var(--amber-bg); color: var(--amber); border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; }
+.explorer-note[hidden] { display: none; }
 .table-wrap { overflow-x: auto; border: 0.5px solid var(--border-light); border-radius: var(--radius-md); }
 table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--bg-surface); }
 th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); text-align: left; padding: 8px 12px; border-bottom: 0.5px solid var(--border-light); white-space: nowrap; cursor: pointer; user-select: none; background: var(--bg-subtle); }
