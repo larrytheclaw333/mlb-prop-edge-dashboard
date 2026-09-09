@@ -13,7 +13,7 @@ let STATE = {
   audit: null,
   activePage: "picks",
   performanceScope: "v2",
-  explorerSort: { key: "expected_value_per_100", dir: -1 },
+  explorerSort: { key: "label", dir: 1 },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -49,78 +49,6 @@ function resultUnit(market, value) {
   if (market === "batter_hits") return Math.abs(n) === 1 ? "hit" : "hits";
   if (market === "nrfi_yrfi") return "runs";
   return "units";
-}
-function statcastStatusLabel(status) {
-  return {
-    matched: "eligible sample",
-    sample_below_threshold: "below blend threshold",
-    missing_required_fields: "missing required fields",
-    no_statcast_match: "not matched",
-  }[status] || (status ? status.replace(/_/g, " ") : "—");
-}
-function handLabel(hand) {
-  const h = (hand || "").toUpperCase();
-  if (h === "R" || h === "L") return `${h}HP`;
-  return "—";
-}
-function lineupSideLabel(side) {
-  const s = (side || "").toUpperCase();
-  if (s === "R" || s === "L") return `${s}-heavy lineup`;
-  return "lineup context";
-}
-function reasonLabel(reason) {
-  if (reason === "pitcher_k_over_one_book_edge_penalty") return "K Over one-book edge penalty";
-  if (reason === "pitcher_k_under_guardrail") return "K Under guardrail";
-  return reason ? reason.replace(/_/g, " ") : "unavailable";
-}
-function bookLabel(book) {
-  return text(book).replace(/_/g, " ");
-}
-function pp(v, decimals = 2) {
-  return v == null ? "—" : `${fmt(v, decimals)}pp`;
-}
-function marketAnchorRows(c) {
-  if (c.market_anchor_type === "one_book") {
-    const fairProb = c.one_book_fair_probability ?? c.selected_book_fair_probability ?? c.consensus_probability;
-    return [
-      ["Market anchor", `one book (${bookLabel(c.selected_book || c.book)})`],
-      ["One-book fair prob", fmtPct(fairProb)],
-    ];
-  }
-  if (c.market_anchor_type === "true_consensus") {
-    const books = c.consensus_books != null ? `${c.consensus_books} books` : "multi-book";
-    return [
-      ["Market anchor", `true consensus (${books})`],
-      ["True consensus prob", fmtPct(c.true_consensus_probability ?? c.consensus_probability)],
-    ];
-  }
-  return [
-    ["Market anchor", "legacy / unspecified"],
-    ["Market fair prob (legacy)", fmtPct(c.consensus_probability)],
-  ];
-}
-function edgeRequirementRows(c) {
-  const effective = c.effective_edge_required ?? c.min_edge_required;
-  if (effective == null) return [];
-  const base = c.base_edge_required;
-  const extra = c.one_book_extra_edge_required;
-  let value = pp(effective);
-  if (base != null && extra != null && Number(extra) > 0) {
-    value = `${pp(effective)} (${pp(base)} base + ${pp(extra)} one-book)`;
-  }
-  return [["Edge required", value]];
-}
-function platoonRows(c) {
-  if (c.platoon_context_available === true) {
-    return [
-      ["Platoon context", `${handLabel(c.pitcher_hand)} vs ${lineupSideLabel(c.dominant_batter_side)}`],
-      ["Lineup bats", `${c.right_batter_count ?? 0}R · ${c.left_batter_count ?? 0}L · ${c.switch_inferred_count ?? 0}S`],
-    ];
-  }
-  if (c.platoon_context_available === false) {
-    return [["Platoon context", reasonLabel(c.platoon_context_unavailable_reason)]];
-  }
-  return [];
 }
 function resultDeltaHTML(c) {
   const status = c.status || "pending";
@@ -306,9 +234,6 @@ function buildPickCard(c, isPick) {
   const div = document.createElement("div");
   div.className = "pick-card" + (isPick ? " is-pick" : "");
   const sc = selClass(c.selection);
-  const edge = c.edge_percentage_points;
-  const edgeCls = edge >= 0 ? "pos" : "neg";
-  const edgeSign = edge >= 0 ? "+" : "";
 
   // Result badge
   let resultHTML = "";
@@ -323,53 +248,14 @@ function buildPickCard(c, isPick) {
     resultHTML = `<div class="result-row"><span class="result-badge result-pending">Pending</span></div>`;
   }
 
-  // Market-specific detail rows
-  let detailRows = "";
-  if (c.market === "pitcher_strikeouts") {
-    detailRows = [
-      ["Projected Ks", fmt(c.projected_ks, 2)],
-      ["IP / start", fmt(c.ip_per_start, 2)],
-      ["Starter role", c.starter_role ? c.starter_role.replace(/_/g, " ") : "—"],
-      ...platoonRows(c),
-      ["Opp K adjustment", fmt(c.opponent_k_adjustment, 3)],
-      ["Baseball prob", fmtPct(c.baseball_probability)],
-      ...marketAnchorRows(c),
-      ["Model weight", c.baseball_weight != null ? (c.baseball_weight * 100).toFixed(0) + "%" : "—"],
-      ...edgeRequirementRows(c),
-      ["Park factor", fmt(c.park_hit_factor, 2)],
-    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
-  } else if (c.market === "batter_hits") {
-    detailRows = [
-      ["AVG / xBA", `${fmt(c.batter_avg, 3)} / ${c.batter_xba != null ? fmt(c.batter_xba, 3) : "—"}`],
-      ["Baseline AVG", fmt(c.baseline_avg, 3)],
-      ["xBA sample", c.statcast_pa != null ? `${c.statcast_pa} PA · ${statcastStatusLabel(c.statcast_match_status)}` : statcastStatusLabel(c.statcast_match_status)],
-      ["xBA blend eligible", c.xba_available ? "yes" : "no"],
-      ["xBA blend used", c.xba_blend_used ? "yes" : "no"],
-      ["Season PA", c.season_pa ?? "—"],
-      ["Lineup spot", c.lineup_spot != null ? "#" + c.lineup_spot : "—"],
-      ["Lineup confirmed", c.lineup_confirmed ? "yes" : "no"],
-      ["Opp pitcher", c.opposing_pitcher || "—"],
-      [`Opp ERA / H9`, c.opposing_pitcher_era != null ? `${fmt(c.opposing_pitcher_era, 2)} / ${fmt(c.opposing_pitcher_h9, 2)}` : "—"],
-      ["Pitcher hit adj", fmt(c.pitcher_hit_adjustment, 3)],
-      ["Park factor", fmt(c.park_hit_factor, 2)],
-      ["Baseball prob", fmtPct(c.baseball_probability)],
-      ["Consensus prob", fmtPct(c.consensus_probability)],
-    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
-  } else if (c.market === "nrfi_yrfi") {
-    detailRows = [
-      ["Away starter", c.away_probable_pitcher || "—"],
-      ["Home starter", c.home_probable_pitcher || "—"],
-      ["Away 1st inn λ", fmt(c.away_first_inning_lambda, 3)],
-      ["Home 1st inn λ", fmt(c.home_first_inning_lambda, 3)],
-      ["Away score prob", fmtPct(c.away_score_probability)],
-      ["Home score prob", fmtPct(c.home_score_probability)],
-      ["Market hold %", fmt(c.market_hold_pct, 1)],
-      ["Baseball prob", fmtPct(c.baseball_probability)],
-      ["Consensus prob", fmtPct(c.consensus_probability)],
-    ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
-  }
-
-  const uid = (c.candidate_id || c.label || Math.random()).toString().replace(/[^a-z0-9]/gi, "_");
+  const uid = (c.label || Math.random()).toString().replace(/[^a-z0-9]/gi, "_");
+  const detailRows = [
+    ["Book", c.book || "—"],
+    ["Odds", fmtOdds(c.american_odds)],
+    ["Line", c.line ?? "—"],
+    ["Venue", c.venue_name || c.event_label || "—"],
+    ["Status", c.status ? c.status.replace(/_/g, " ") : "—"],
+  ].map(([k, v]) => `<div class="drow"><span class="dkey">${k}</span><span class="dval">${v}</span></div>`).join("");
 
   div.innerHTML = `
     <div class="pick-header">
@@ -378,25 +264,12 @@ function buildPickCard(c, isPick) {
       ${mktBadgeHTML(c.market)}
     </div>
     <div class="pick-stats">
-      <div class="pstat">EV <span>$${fmt(c.expected_value_per_100, 2)}</span></div>
-      <div class="pstat">Edge <span class="${edgeCls}">${edgeSign}${fmt(edge, 2)}pp</span></div>
-      <div class="pstat">Model <span>${fmtPct(c.model_probability)}</span></div>
-      <div class="pstat">Implied <span>${fmtPct(c.implied_probability)}</span></div>
       <div class="pstat">Odds <span>${fmtOdds(c.american_odds)}</span></div>
+      <div class="pstat">Line <span>${c.line ?? "—"}</span></div>
       <div class="pstat">@ <span>${c.venue_name || c.event_label || "—"}</span></div>
     </div>
     ${resultHTML}
     <div class="pick-detail" id="det-${uid}">
-      <div class="prob-visual">
-        <div class="prob-track">
-          <div class="prob-fill" style="width:${Math.min(c.model_probability ?? 0, 100)}%"></div>
-          <div class="prob-marker" style="left:${Math.min(c.implied_probability ?? 0, 100)}%"></div>
-        </div>
-        <div class="prob-labels">
-          <span>Model ${fmtPct(c.model_probability)}</span>
-          <span>Implied ${fmtPct(c.implied_probability)}</span>
-        </div>
-      </div>
       <div class="detail-grid">${detailRows}</div>
     </div>`;
 
@@ -451,9 +324,6 @@ function renderPicksPage() {
 }
 
 // ── Explorer page ────────────────────────────────────────────────────────────
-
-let explorerSortKey = "expected_value_per_100";
-let explorerSortDir = -1;
 
 function renderExplorer() {
   const d = STATE.dayData;
