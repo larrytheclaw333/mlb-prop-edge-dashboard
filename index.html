@@ -82,45 +82,15 @@
   <!-- ── EXPLORER PAGE ── -->
   <div class="page" id="page-explorer">
 
-    <div class="filter-bar">
-      <select class="filter-sel" id="f-market">
-        <option value="">All markets</option>
-        <option value="pitcher_strikeouts">Pitcher Ks</option>
-        <option value="batter_hits">Batter hits</option>
-        <option value="nrfi_yrfi">NRFI/YRFI</option>
-      </select>
-      <select class="filter-sel" id="f-qual">
-        <option value="">All candidates</option>
-        <option value="true">Qualified only</option>
-        <option value="false">Not qualified</option>
-      </select>
-      <select class="filter-sel" id="f-sel">
-        <option value="">Over + Under</option>
-        <option value="Over">Over / YRFI</option>
-        <option value="Under">Under / NRFI</option>
-      </select>
+    <div class="explorer-moved">
+      <div class="explorer-moved-title">Candidate analysis moved</div>
+      <div class="explorer-moved-copy">
+        Detailed candidate rows, model probabilities, EV, rejected-row reasons,
+        and what-if testing now belong in the restricted internal dashboard.
+        This public dashboard only carries aggregate performance and status data.
+      </div>
+      <div class="explorer-moved-meta" id="explorer-public-summary">Loading public summary...</div>
     </div>
-    <div class="explorer-note" id="explorer-note" hidden></div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th data-sort="label">Label <span class="sort-arrow">↕</span></th>
-            <th>Market</th>
-            <th>Sel</th>
-            <th data-sort="american_odds">Odds <span class="sort-arrow">↕</span></th>
-            <th data-sort="model_probability">Model % <span class="sort-arrow">↕</span></th>
-            <th data-sort="implied_probability">Implied % <span class="sort-arrow">↕</span></th>
-            <th data-sort="edge_percentage_points">Edge pp <span class="sort-arrow">↕</span></th>
-            <th data-sort="expected_value_per_100" class="sorted">EV/100 <span class="sort-arrow">↓</span></th>
-            <th data-sort="qualified" id="explorer-qual-header">Qual <span class="sort-arrow">↕</span></th>
-          </tr>
-        </thead>
-        <tbody id="explorer-body"></tbody>
-      </table>
-    </div>
-    <div class="tbl-count" id="tbl-count"></div>
 
   </div>
 
@@ -153,9 +123,9 @@
         </div>
       </div>
       <div class="chart-card">
-        <div class="chart-title">Edge distribution — qualified Ks</div>
-        <div style="position:relative; height:160px;">
-          <canvas id="edge-chart" role="img" aria-label="Edge in pp for each qualified pitcher K candidate"></canvas>
+        <div class="chart-title">Public boundary</div>
+        <div class="public-boundary-note" id="public-boundary-note">
+          Candidate-level model diagnostics are restricted to the internal dashboard.
         </div>
       </div>
     </div>
@@ -248,7 +218,7 @@
       </table>
     </div>
 
-    <div class="section-title">Calibration snapshot</div>
+    <div class="section-title">Signal snapshot</div>
     <div class="cov-grid audit-grid">
       <div class="cov-card">
         <div class="cov-title">By market</div>

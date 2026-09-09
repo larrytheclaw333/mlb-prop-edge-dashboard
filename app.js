@@ -458,91 +458,15 @@ let explorerSortDir = -1;
 function renderExplorer() {
   const d = STATE.dayData;
   if (!d) return;
-  const paused = pauseActive();
-
-  const mktF = el("f-market").value;
-  const qualF = el("f-qual").value;
-  const selF = el("f-sel").value;
-  const qualSelect = el("f-qual");
-  const explorerNote = el("explorer-note");
-  const qualHeader = el("explorer-qual-header");
-
-  if (qualSelect) {
-    qualSelect.options[0].textContent = paused ? "All rows" : "All candidates";
-    qualSelect.options[1].textContent = paused ? "Published picks" : "Qualified only";
-    qualSelect.options[2].textContent = paused ? "Diagnostics only" : "Not qualified";
+  const summary = d.summary || {};
+  const target = el("explorer-public-summary");
+  if (target) {
+    target.textContent = `${summary.total_candidates ?? 0} candidates scored on ${d.run_date}; ${summary.picks_count ?? 0} public pick rows retained.`;
   }
-  if (explorerNote) {
-    explorerNote.hidden = !paused;
-    explorerNote.textContent = paused
-      ? "Explorer rows are diagnostic model/audit signals while pick emission is paused."
-      : "";
-  }
-  if (qualHeader) {
-    qualHeader.innerHTML = `${paused ? "Status" : "Qual"} <span class="sort-arrow">↕</span>`;
-  }
-
-  let data = (d.all_candidates || []).slice();
-  if (mktF) data = data.filter(c => c.market === mktF);
-  if (qualF === "true") data = data.filter(c => c.qualified);
-  if (qualF === "false") data = data.filter(c => !c.qualified);
-  if (selF === "Over") data = data.filter(c => c.selection === "Over" || c.selection === "YRFI");
-  if (selF === "Under") data = data.filter(c => c.selection === "Under" || c.selection === "NRFI");
-
-  data.sort((a, b) => explorerSortDir * ((b[explorerSortKey] ?? -9999) - (a[explorerSortKey] ?? -9999)));
-
-  const tbody = el("explorer-body");
-  tbody.innerHTML = "";
-
-  if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty">No candidates match filters.</td></tr>';
-    el("tbl-count").textContent = "0 results";
-    return;
-  }
-
-  data.forEach(c => {
-    const edge = c.edge_percentage_points;
-    const ecls = edge >= 0 ? "pos" : "neg";
-    const sc = selClass(c.selection);
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${c.label}</td>
-      <td>${mktBadgeHTML(c.market)}</td>
-      <td><span class="sel-badge sel-${sc}" style="font-size:10px;">${c.selection}</span></td>
-      <td>${fmtOdds(c.american_odds)}</td>
-      <td>${fmtPct(c.model_probability)}</td>
-      <td>${fmtPct(c.implied_probability)}</td>
-      <td class="${ecls}">${edge >= 0 ? "+" : ""}${fmt(edge, 2)}</td>
-      <td>$${fmt(c.expected_value_per_100, 2)}</td>
-      <td><span class="${c.qualified ? "badge-q" : "badge-nq"}">${paused ? (c.qualified ? "published" : "diagnostic") : (c.qualified ? "yes" : "no")}</span></td>`;
-    tbody.appendChild(row);
-  });
-
-  el("tbl-count").textContent = `${data.length} of ${d.all_candidates?.length ?? 0} candidates`;
 }
 
 function setupExplorerSort() {
-  document.querySelectorAll("th[data-sort]").forEach(th => {
-    th.addEventListener("click", () => {
-      const key = th.dataset.sort;
-      if (explorerSortKey === key) {
-        explorerSortDir *= -1;
-      } else {
-        explorerSortKey = key;
-        explorerSortDir = -1;
-      }
-      document.querySelectorAll("th[data-sort]").forEach(t => {
-        t.classList.remove("sorted");
-        t.querySelector(".sort-arrow").textContent = "↕";
-      });
-      th.classList.add("sorted");
-      th.querySelector(".sort-arrow").textContent = explorerSortDir === -1 ? "↓" : "↑";
-      renderExplorer();
-    });
-  });
-  ["f-market","f-qual","f-sel"].forEach(id => {
-    el(id)?.addEventListener("change", renderExplorer);
-  });
+  renderExplorer();
 }
 
 // ── Diagnostics page ─────────────────────────────────────────────────────────
@@ -636,36 +560,6 @@ function buildDiagCharts(d) {
     });
   }
 
-  // Edge distribution for pitcher Ks
-  if (edgeChart) edgeChart.destroy();
-  const edgeCtx = el("edge-chart");
-  if (edgeCtx) {
-    const kCands = (d.qualified || []).filter(c => c.market === "pitcher_strikeouts")
-      .sort((a,b) => b.edge_percentage_points - a.edge_percentage_points);
-    const labels = kCands.map(c => c.player || c.label);
-    const edges = kCands.map(c => parseFloat((c.edge_percentage_points || 0).toFixed(2)));
-    edgeChart = new Chart(edgeCtx, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [{
-          data: edges,
-          backgroundColor: edges.map(e => e >= 0 ? "#3B6D11" : "#A32D2D"),
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, indexAxis: "y",
-        plugins: { legend: { display: false } },
-        scales: {
-          x: {
-            grid: { color: "rgba(128,128,128,0.1)" },
-            ticks: { callback: v => v + "pp" }
-          },
-          y: { ticks: { font: { size: 10 } }, grid: { display: false } }
-        }
-      }
-    });
-  }
 }
 
 // ── Audit page ───────────────────────────────────────────────────────────────
@@ -733,11 +627,9 @@ function renderCalibrationList(container, rows) {
     return;
   }
   rows.forEach(row => {
-    const gap = row.calibration_gap;
-    const gapCls = Math.abs(gap || 0) <= 3 ? "pos" : "neg";
     container.innerHTML += `<div class="audit-row">
       <div><strong>${mktLabel(row.market)}</strong><span>${row.qualified ?? "—"} qualified · ${signalBadge(row.signal_strength, row.insufficient_data)}</span></div>
-      <div class="${gapCls}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</div>
+      <div>${fmtPct(row.win_rate)}</div>
     </div>`;
   });
 }
@@ -749,10 +641,9 @@ function renderBucketList(container, rows) {
     return;
   }
   rows.forEach(row => {
-    const gap = row.calibration_gap;
     container.innerHTML += `<div class="audit-row">
       <div><strong>${mktLabel(row.market)} ${text(row.bucket)}</strong><span>${row.qualified ?? "—"} qualified · win ${fmtPct(row.win_rate)}</span></div>
-      <div class="${Math.abs(gap || 0) <= 3 ? "pos" : "neg"}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</div>
+      <div>${signalBadge(row.signal_strength, row.insufficient_data)}</div>
     </div>`;
   });
 }
@@ -777,14 +668,11 @@ function renderKComparison(rows) {
 
 function renderKCompareSide(label, row) {
   const roiCls = (row.roi || 0) >= 0 ? "pos" : "neg";
-  const gap = row.calibration_gap;
   return `<div class="audit-compare-side">
     <div class="audit-compare-title">${label}</div>
     <div class="audit-compare-main ${roiCls}">${fmtROI(row.roi)} ROI</div>
     <div class="audit-compare-row"><span>Record</span><strong>${row.wins ?? 0}-${row.losses ?? 0}</strong></div>
     <div class="audit-compare-row"><span>Win rate</span><strong>${fmtPct(row.actual_win_rate ?? row.win_rate)}</strong></div>
-    <div class="audit-compare-row"><span>Model avg</span><strong>${fmtPct(row.avg_model_probability)}</strong></div>
-    <div class="audit-compare-row"><span>Calibration gap</span><strong class="${Math.abs(gap || 0) <= 3 ? "pos" : "neg"}">${gap == null ? "—" : (gap > 0 ? "+" : "") + fmt(gap, 1) + "pp"}</strong></div>
     <div class="audit-compare-row"><span>P/L</span><strong class="${roiCls}">${fmtPL(row.profit_loss)}</strong></div>
   </div>`;
 }
